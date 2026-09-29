@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cutout Studio</title>
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<style>
+/* Layout: a workbench — one controls rail on the left, a big proof sheet (preview) on the right; stacks at phone width with the proof first. */
+:root {
+  --bg: #e9ecf1;
+  --panel: #fbfcfd;
+  --sunk: #f1f3f7;
+  --fg: #14171c;
+  --muted: #5a6271;
+  --line: #d5dae3;
+  --accent: #2f55d4;
+  --accent-soft: #e3e9fc;
+  --accent-fg: #ffffff;
+  --warn: #9a5700;
+  --warn-soft: #fff1dc;
+  --ok: #1d7a4a;
+  --check-a: #ffffff;
+  --check-b: #dde1e8;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --r: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #171a20; --sunk: #1d2129; --fg: #e6e8ed; --muted: #9ba3b2; --line: #2a2f39;
+    --accent: #85a0ff; --accent-soft: #1e2742; --accent-fg: #0b0f1d; --warn: #f0b060; --warn-soft: #2e2413; --ok: #5fcf95;
+    --check-a: #2a2e36; --check-b: #22262d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #171a20; --sunk: #1d2129; --fg: #e6e8ed; --muted: #9ba3b2; --line: #2a2f39;
+  --accent: #85a0ff; --accent-soft: #1e2742; --accent-fg: #0b0f1d; --warn: #f0b060; --warn-soft: #2e2413; --ok: #5fcf95;
+  --check-a: #2a2e36; --check-b: #22262d; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font-body); padding: 20px 16px 32px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+h1 { font: 700 26px/1.1 var(--font-display); margin: 0; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); }
+.bench { display: grid; grid-template-columns: minmax(300px, 370px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } .stage { order: -1; } }
+
+.rail { display: grid; gap: 10px; min-width: 0; }
+details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 14px; font: 600 15px var(--font-display); }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; flex: none; }
+details.sec[open] > summary::before { transform: rotate(45deg); }
+summary .tag { margin-left: auto; font: 500 12px var(--font-body); color: var(--muted); }
+.body { padding: 0 14px 14px; display: grid; gap: 12px; }
+.stack { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.grow { flex: 1 1 120px; min-width: 0; }
+label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.sub { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-top: 2px; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+input[type=text], input[type=number], select {
+  font: inherit; font-size: 14px; color: var(--fg); background: var(--sunk); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0;
+}
+input[type=number] { font-family: var(--font-mono); font-size: 13px; }
+input[type=color] { width: 40px; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); flex: none; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.rng { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; font-size: 13px; color: var(--muted); font-weight: 500; }
+.rng output { font: 12px var(--font-mono); color: var(--fg); }
+.rng input { grid-column: 1 / -1; }
+.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; cursor: pointer; }
+.chk input { accent-color: var(--accent); width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+button, .btn {
+  font: 600 14px var(--font-body); border-radius: 6px; padding: 8px 12px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.ghost { border-color: transparent; background: none; color: var(--muted); font-weight: 500; padding: 4px 6px; justify-self: start; }
+button.ghost:hover { color: var(--accent); }
+button.icon { padding: 6px 10px; font-weight: 500; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: 0; border-radius: 0; padding: 6px 10px; font-weight: 500; font-size: 13px; background: var(--panel); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 4px 9px; font: 500 12px var(--font-mono); border-radius: 999px; }
+.chips button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.sw { width: 28px; height: 28px; padding: 0; border-radius: 6px; }
+
+.drop { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 6px; text-align: center; cursor: pointer; background: var(--sunk); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-weight: 600; }
+.drop span { font-size: 13px; color: var(--muted); }
+.meta { font: 12px/1.5 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+
+.grid9 { display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; }
+.grid9 button { width: 26px; height: 22px; padding: 0; border-radius: 4px; background: var(--sunk); }
+.grid9 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.posrow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+.note { font-size: 13px; padding: 8px 10px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); }
+.progress { height: 6px; background: var(--sunk); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.status { font-size: 13px; color: var(--muted); }
+.status.err { color: var(--warn); }
+.status.ok { color: var(--ok); }
+
+.stage { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; gap: 10px; min-width: 0; }
+@media (max-width: 860px) { .stage { position: static; } }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.canvas-box {
+  position: relative; display: grid; place-items: center; min-height: 260px; max-height: 70vh; border-radius: 6px; overflow: hidden;
+  background-color: var(--check-a);
+  background-image: linear-gradient(45deg, var(--check-b) 25%, transparent 25%), linear-gradient(-45deg, var(--check-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--check-b) 75%), linear-gradient(-45deg, transparent 75%, var(--check-b) 75%);
+  background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+}
+.cv-wrap { position: relative; line-height: 0; max-width: 100%; }
+#out { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; touch-action: none; cursor: default; }
+#ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .55; }
+#out.grab { cursor: grab; }
+#out.brush { cursor: none; }
+#out.crop { cursor: crosshair; }
+#brushCur { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.bar .row { gap: 6px; }
+.dims { font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.dims span { color: var(--muted); font-weight: 400; }
+.export { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.export select { width: auto; }
+.inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.inline input[type=number] { width: 90px; }
+.badge { font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: .06em; padding: 3px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.cropbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 6px; background: var(--accent-soft); }
+.cropbar .grow { font-size: 13px; color: var(--accent); font-weight: 600; }
+.queue { display: grid; gap: 4px; max-height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.queue li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 13px; padding: 5px 8px; background: var(--sunk); border-radius: 5px; }
+.queue li .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue li .s { font: 11px var(--font-mono); color: var(--muted); }
+.queue li .s.done { color: var(--ok); } .queue li .s.fail { color: var(--warn); }
+.queue li button { padding: 0 6px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
+.engine { font: 11px/1.5 var(--font-mono); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Cutout Studio</h1>
+    <p>Remove backgrounds, crop, resize, watermark, compress and convert images. Everything runs in your browser.</p>
+  </header>
+
+  <div class="bench">
+    <div class="rail">
+      <!-- IMAGE -->
+      <details class="sec" open>
+        <summary>Image <span class="tag" id="srcTag">Sample</span></summary>
+        <div class="body">
+          <label class="drop" id="drop" for="file">
+            <strong>Drop an image, choose a file or paste</strong>
+            <span>PNG, JPEG, WebP, GIF, BMP, AVIF or HEIC. Drop several to batch them.</span>
+            <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+          </label>
+          <div class="meta" id="srcMeta"></div>
+        </div>
+      </details>
+
+      <!-- CROP & ROTATE -->
+      <details class="sec">
+        <summary>Crop &amp; rotate <span class="tag" id="geoTag">None</span></summary>
+        <div class="body">
+          <div class="row">
+            <button class="icon" id="rotL" title="Rotate left">⟲ 90°</button>
+            <button class="icon" id="rotR" title="Rotate right">⟳ 90°</button>
+            <button class="icon" id="flipH">Flip ↔</button>
+            <button class="icon" id="flipV">Flip ↕</button>
+          </div>
+          <div class="row">
+            <button id="cropBtn">Crop…</button>
+            <span class="hint" id="cropInfo">Drag a box on the preview.</span>
+          </div>
+          <button class="ghost" data-reset="geo">Reset crop &amp; rotation</button>
+        </div>
+      </details>
+
+      <!-- REMOVE OBJECTS -->
+      <details class="sec">
+        <summary>Remove objects <span class="tag" id="healTag">AI eraser</span></summary>
+        <div class="body">
+          <p class="hint">Paint over text, a date stamp, a logo, a blemish or an object, then click Remove. AI fills the spot with matching background. Use this only on images you own or have rights to.</p>
+          <div class="row">
+            <button id="healPaint" aria-pressed="false">Paint area</button>
+            <button class="primary" id="healRun" disabled>Remove painted area</button>
+            <button class="ghost" id="healClear" disabled>Clear paint</button>
+          </div>
+          <label class="rng">Brush size <output id="healBrushO"></output><input type="range" id="healBrush" min="6" max="160" value="40"></label>
+          <div id="healProg" hidden><div class="progress"><i id="healBar"></i></div></div>
+          <div class="status" id="healStatus">The eraser model (28 MB) loads the first time you use it.</div>
+        </div>
+      </details>
+
+      <!-- BACKGROUND -->
+      <details class="sec" open>
+        <summary>Background <span class="tag" id="bgTag">Original</span></summary>
+        <div class="body">
+          <div class="sub">Model</div>
+          <div class="seg" id="modelSeg">
+            <button data-v="isnet_fp16" aria-pressed="true">Best quality</button>
+            <button data-v="isnet_quint8" aria-pressed="false">Fast</button>
+          </div>
+          <div class="row">
+            <button class="primary" id="rmBtn">Remove background</button>
+            <div class="seg" id="baseSeg" hidden>
+              <button data-v="original" aria-pressed="true">Original</button>
+              <button data-v="cutout" aria-pressed="false">Cutout</button>
+            </div>
+          </div>
+          <div id="rmProg" hidden><div class="progress"><i id="rmBar"></i></div></div>
+          <div class="status" id="rmStatus">Runs on this computer. Nothing is uploaded.</div>
+
+          <div id="fixBox" class="stack" hidden>
+            <hr>
+            <div class="sub">Fix the cutout</div>
+            <div class="seg" id="toolSeg">
+              <button data-v="move" aria-pressed="true">Move watermark</button>
+              <button data-v="erase" aria-pressed="false">Erase</button>
+              <button data-v="restore" aria-pressed="false">Restore</button>
+            </div>
+            <label class="rng">Brush size <output id="brushO"></output><input type="range" id="brush" min="6" max="160" value="40"></label>
+            <p class="hint">Paint on the preview. Erase removes leftover background, Restore brings back parts of the subject.</p>
+            <div class="sub">Cutout effects</div>
+            <label class="rng">Soft edge <output id="featherO"></output><input type="range" id="feather" min="0" max="20" value="0"></label>
+            <label class="rng">Outline <output id="outlineO"></output><input type="range" id="outline" min="0" max="10" step="0.5" value="0"></label>
+            <div class="row">
+              <input type="color" id="outlineColor" value="#ffffff" aria-label="Outline color">
+              <label class="chk"><input type="checkbox" id="shadow"> Drop shadow</label>
+            </div>
+          </div>
+
+          <hr>
+          <div class="sub">Fill behind the image</div>
+          <div class="seg" id="fillSeg">
+            <button data-v="transparent" aria-pressed="true">Transparent</button>
+            <button data-v="color" aria-pressed="false">Color</button>
+            <button data-v="gradient" aria-pressed="false">Gradient</button>
+            <button data-v="image" aria-pressed="false">Image</button>
+          </div>
+          <div class="row" id="fillColorRow" hidden>
+            <input type="color" id="fillColor" value="#ffffff" aria-label="Fill color">
+            <div class="chips" id="fillSwatches"></div>
+          </div>
+          <div class="chips" id="gradRow" hidden></div>
+          <div class="row" id="fillImgRow" hidden>
+            <label class="btn" for="fillFile">Choose background image</label>
+            <input type="file" id="fillFile" accept="image/*,.heic,.heif" hidden>
+            <span class="meta" id="fillMeta">None chosen</span>
+          </div>
+          <button class="ghost" data-reset="bg">Reset background</button>
+          <div class="engine" id="engine"></div>
+        </div>
+      </details>
+
+      <!-- SIZE -->
+      <details class="sec" open>
+        <summary>Size <span class="tag" id="sizeTag"></span></summary>
+        <div class="body">
+          <div class="row">
+            <label class="f grow">Width (px)<input type="number" id="w" min="1" max="12000"></label>
+            <label class="f grow">Height (px)<input type="number" id="h" min="1" max="12000"></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="lock" checked> Keep proportions</label>
+          <div class="sub">Scale</div>
+          <div class="chips" id="scaleChips">
+            <button data-s="0.25">25%</button><button data-s="0.5">50%</button><button data-s="0.75">75%</button>
+            <button data-s="1">100%</button><button data-s="2">200%</button>
+          </div>
+          <div class="sub">Presets</div>
+          <div class="chips" id="presetChips">
+            <button data-w="1080" data-h="1080">1080×1080</button>
+            <button data-w="1080" data-h="1350">1080×1350</button>
+            <button data-w="1080" data-h="1920">1080×1920</button>
+            <button data-w="1920" data-h="1080">1920×1080</button>
+            <button data-w="1200" data-h="630">1200×630</button>
+            <button data-w="413" data-h="531">Passport 35×45</button>
+          </div>
+          <div id="modeWrap">
+            <div class="sub">When proportions change</div>
+            <div class="seg" id="modeSeg">
+              <button data-v="fit" aria-pressed="true">Fit</button>
+              <button data-v="fill" aria-pressed="false">Crop to fill</button>
+              <button data-v="stretch" aria-pressed="false">Stretch</button>
+            </div>
+          </div>
+          <button class="ghost" data-reset="size">Reset size</button>
+        </div>
+      </details>
+
+      <!-- WATERMARK -->
+      <details class="sec" open>
+        <summary>Watermark <span class="tag" id="wmTag">Off</span></summary>
+        <div class="body">
+          <label class="chk"><input type="checkbox" id="tOn" checked> Text watermark</label>
+          <div id="tBox" class="stack">
+            <label class="f">Text<input type="text" id="tText" value="© Your Name 2026"></label>
+            <div class="row">
+              <label class="f grow">Font
+                <select id="tFont">
+                  <option value="Figtree">Figtree</option>
+                  <option value="Bricolage Grotesque">Bricolage</option>
+                  <option value="Playfair Display">Playfair (serif)</option>
+                  <option value="JetBrains Mono">Mono</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Impact">Impact</option>
+                </select>
+              </label>
+              <input type="color" id="tColor" value="#ffffff" aria-label="Text color">
+            </div>
+            <div class="row">
+              <label class="chk"><input type="checkbox" id="tBold" checked> Bold</label>
+              <label class="chk"><input type="checkbox" id="tShadow" checked> Shadow</label>
+            </div>
+            <label class="rng">Size <output id="tSizeO"></output><input type="range" id="tSize" min="1" max="30" step="0.5" value="5"></label>
+            <label class="rng">Opacity <output id="tOpO"></output><input type="range" id="tOp" min="5" max="100" value="70"></label>
+            <label class="rng">Rotation <output id="tRotO"></output><input type="range" id="tRot" min="-90" max="90" value="0"></label>
+            <div class="posrow">
+              <div class="grid9" id="tGrid" aria-label="Text position"></div>
+              <label class="chk"><input type="checkbox" id="tTile"> Repeat across image</label>
+            </div>
+          </div>
+          <hr>
+          <label class="chk"><input type="checkbox" id="lOn"> Logo watermark</label>
+          <div id="lBox" class="stack">
+            <div class="row">
+              <label class="btn" for="lFile">Choose logo</label>
+              <input type="file" id="lFile" accept="image/*" hidden>
+              <span class="meta" id="lMeta">Sample logo</span>
+            </div>
+            <label class="rng">Size <output id="lSizeO"></output><input type="range" id="lSize" min="3" max="80" value="18"></label>
+            <label class="rng">Opacity <output id="lOpO"></output><input type="range" id="lOp" min="5" max="100" value="85"></label>
+            <div class="posrow">
+              <div class="grid9" id="lGrid" aria-label="Logo position"></div>
+              <label class="chk"><input type="checkbox" id="lTile"> Repeat across image</label>
+            </div>
+          </div>
+          <p class="hint">Drag a watermark on the preview to place it anywhere. Your watermark settings are remembered on this device.</p>
+          <button class="ghost" data-reset="wm">Reset watermark</button>
+        </div>
+      </details>
+
+      <!-- BATCH -->
+      <details class="sec" id="batchSec">
+        <summary>Batch <span class="tag" id="batchTag">0 images</span></summary>
+        <div class="body">
+          <label class="drop" id="bDrop" for="bFiles">
+            <strong>Add images to the batch</strong>
+            <span>Every image gets the current size, watermark, fill, format and file-size limit.</span>
+            <input type="file" id="bFiles" accept="image/*,.heic,.heif" multiple hidden>
+          </label>
+          <ul class="queue" id="queue"></ul>
+          <label class="chk"><input type="checkbox" id="bRm"> Remove the background from each image</label>
+          <p class="hint" id="bRule"></p>
+          <div class="row">
+            <button class="primary" id="bRun" disabled>Process images</button>
+            <button class="ghost" id="bClear">Clear list</button>
+          </div>
+          <div id="bProg" hidden><div class="progress"><i id="bBar"></i></div></div>
+          <div class="status" id="bStatus"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- PREVIEW + EXPORT -->
+    <section class="stage" aria-label="Preview">
+      <div class="sheet">
+        <div class="bar">
+          <div class="dims" id="dims"></div>
+          <div class="row">
+            <button class="icon" id="undo" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+            <button class="icon" id="redo" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+            <span class="badge" id="srcBadge">Sample</span>
+          </div>
+        </div>
+        <div class="cropbar" id="cropBar" hidden>
+          <span class="grow">Crop: drag a box, or drag its corners</span>
+          <div class="chips" id="ratioChips">
+            <button data-r="0" aria-pressed="true">Free</button>
+            <button data-r="1">1:1</button>
+            <button data-r="0.8">4:5</button>
+            <button data-r="0.7778">35:45</button>
+            <button data-r="1.5">3:2</button>
+            <button data-r="1.7778">16:9</button>
+            <button data-r="0.5625">9:16</button>
+          </div>
+          <button class="primary" id="cropApply">Apply crop</button>
+          <button id="cropCancel">Cancel</button>
+        </div>
+        <div class="canvas-box" id="box"><div class="cv-wrap"><canvas id="out"></canvas><canvas id="ov"></canvas></div><div id="brushCur" hidden></div></div>
+        <div class="bar">
+          <div class="export">
+            <label class="inline">Format
+              <select id="fmt">
+                <option value="image/png">PNG</option>
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/webp" selected>WebP</option>
+                <option value="image/avif" hidden>AVIF</option>
+                <option value="image/x-icon">ICO (favicon)</option>
+              </select>
+            </label>
+            <label class="inline" id="qWrap">Quality
+              <input type="range" id="q" min="10" max="100" value="90" style="width:110px"><output id="qO" class="meta"></output>
+            </label>
+          </div>
+          <button class="primary" id="dl">Download</button>
+        </div>
+        <div class="export">
+          <label class="inline">Max file size
+            <input type="number" id="target" min="5" max="50000" placeholder="off"> KB
+          </label>
+          <button class="icon" id="fitBtn">Fit under limit</button>
+          <span class="status" id="fitStatus"></span>
+        </div>
+        <div class="meta" id="sizeInfo"></div>
+        <div class="note" id="jpegNote" hidden>JPEG can't store transparency, so transparent areas are filled with white. Choose PNG or WebP to keep them.</div>
+        <div class="note" id="viewerNote" hidden></div>
+        <div class="status" id="dlStatus"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+/* Library + model version. update-model.mjs rewrites this line when a new release comes out. */
+const LIB_VERSION = "1.7.0";
+const MODEL_CACHE = "cutout-model-" + LIB_VERSION;
+
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+const ctx = out.getContext("2d");
+const POS = ["tl","tc","tr","ml","mc","mr","bl","bc","br"];
+const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/x-icon": "ico" };
+const LABEL = { "image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WebP", "image/avif": "AVIF", "image/x-icon": "ICO", "image/gif": "GIF", "image/bmp": "BMP", "image/heic": "HEIC", "image/heif": "HEIF" };
+const LOSSY = ["image/jpeg", "image/webp", "image/avif"];
+const GRADS = [
+  ["#ffffff", "#dfe3ea"], ["#ffd3a5", "#fd6585"], ["#a1c4fd", "#c2e9fb"],
+  ["#d4fc79", "#96e6a1"], ["#f6d365", "#fda085"], ["#434343", "#1c1c1c"],
+];
+
+/* ---------- state ---------- */
+const DEF = {
+  bg: { base: "original", fill: "transparent", fillColor: "#ffffff", grad: 0, feather: 0, outline: 0, outlineColor: "#ffffff", shadow: false },
+  geo: { rot: 0, flipH: false, flipV: false, crop: null },
+  size: { mode: "fit", lock: true, natural: true },
+  text: { on: true, text: "© Your Name 2026", font: "Figtree", color: "#ffffff", bold: true, shadow: true, size: 5, op: 70, rot: 0, pos: "br", tile: false, x: 0.5, y: 0.5 },
+  logo: { on: false, size: 18, op: 85, pos: "tl", tile: false, x: 0.5, y: 0.5 },
+};
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const S = {
+  name: "sample", srcType: "", srcBytes: 0, isSample: true,
+  original: null, mask: null, maskVer: 0, fillImg: null, logoImg: null,
+  w: 0, h: 0, drawRect: null,
+  bg: clone(DEF.bg), geo: clone(DEF.geo), size: clone(DEF.size), text: clone(DEF.text), logo: clone(DEF.logo),
+  fmt: "image/webp", q: 90, target: 0, model: "isnet_fp16",
+};
+let maskSeq = 0, tool = "move", brushSize = 40;
+let healMask = null, healPainted = false, healBusy = false; // "Remove objects" paint, in original-image pixels
+let cropMode = false, cropDraft = null, cropRatio = 0;
+let batchRunning = false;
+let boxes = {};
+
+/* ---------- small helpers ---------- */
+const fmtBytes = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(2) + " MB";
+const typeLabel = (t) => LABEL[t] || (t || "").replace("image/", "").toUpperCase() || "—";
+const clampDim = (v) => Math.max(1, Math.min(12000, Math.round(v) || 1));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const isHeic = (f) => /image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name || "");
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+function setSeg(el, v) { el.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v))); }
+function bindSeg(el, fn) { el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; setSeg(el, b.dataset.v); fn(b.dataset.v); }); }
+function buildGrid(el, layer) {
+  el.innerHTML = POS.map(p => `<button data-p="${p}" aria-label="${p}" aria-pressed="false"></button>`).join("");
+  el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S[layer].pos = b.dataset.p; S[layer].tile = false; syncUI(); render(); });
+}
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Couldn't load " + src.split("/").pop())); document.head.appendChild(s); });
+}
+// Local copy first (start.bat / server.mjs), then the CDN.
+const loadLib = (local, cdn) => loadScript(local).catch(() => loadScript(cdn));
+
+/* ---------- sample content ---------- */
+function makeSample() {
+  const c = new OffscreenCanvas(1600, 1067), g = c.getContext("2d");
+  const sky = g.createLinearGradient(0, 0, 0, 1067);
+  sky.addColorStop(0, "#9fc6e8"); sky.addColorStop(1, "#f3dcc0");
+  g.fillStyle = sky; g.fillRect(0, 0, 1600, 1067);
+  g.fillStyle = "#f7e7b8"; g.beginPath(); g.arc(1220, 260, 110, 0, 7); g.fill();
+  g.fillStyle = "#7f9f86"; g.beginPath(); g.moveTo(0, 760); g.bezierCurveTo(400, 600, 800, 820, 1600, 680); g.lineTo(1600, 1067); g.lineTo(0, 1067); g.fill();
+  g.fillStyle = "#5b7c66"; g.beginPath(); g.moveTo(0, 900); g.bezierCurveTo(500, 780, 1100, 980, 1600, 860); g.lineTo(1600, 1067); g.lineTo(0, 1067); g.fill();
+  g.fillStyle = "rgba(0,0,0,.18)"; g.beginPath(); g.ellipse(800, 905, 250, 34, 0, 0, 7); g.fill();
+  const body = g.createLinearGradient(560, 0, 1000, 0);
+  body.addColorStop(0, "#c2512f"); body.addColorStop(.45, "#e2764f"); body.addColorStop(1, "#9c3c20");
+  g.lineWidth = 46; g.strokeStyle = "#b54728"; g.beginPath(); g.ellipse(1010, 640, 110, 140, 0, -1.4, 1.4); g.stroke();
+  g.fillStyle = body; g.beginPath(); g.moveTo(560, 420); g.lineTo(1010, 420); g.lineTo(985, 880); g.quadraticCurveTo(785, 930, 585, 880); g.closePath(); g.fill();
+  g.fillStyle = "#6b2814"; g.beginPath(); g.ellipse(785, 420, 225, 38, 0, 0, 7); g.fill();
+  g.fillStyle = "#3a1a0c"; g.beginPath(); g.ellipse(785, 428, 200, 28, 0, 0, 7); g.fill();
+  return c.transferToImageBitmap();
+}
+function makeSampleLogo() {
+  const c = new OffscreenCanvas(400, 400), g = c.getContext("2d");
+  g.fillStyle = "#ffffff"; g.beginPath(); g.arc(200, 200, 190, 0, 7); g.fill();
+  g.fillStyle = "#2f55d4"; g.beginPath(); g.arc(200, 200, 160, 0, 7); g.fill();
+  g.fillStyle = "#ffffff"; g.font = "700 150px 'Bricolage Grotesque', sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("CS", 200, 212);
+  return c.transferToImageBitmap();
+}
+
+/* ---------- decoding (incl. HEIC) ---------- */
+async function decode(file) {
+  try { return await createImageBitmap(file, { imageOrientation: "from-image" }); } catch {}
+  if (isHeic(file)) {
+    if (!window.heic2any) await loadLib("vendor/heic2any.min.js", "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js");
+    const r = await window.heic2any({ blob: file, toType: "image/png" });
+    return createImageBitmap(Array.isArray(r) ? r[0] : r);
+  }
+  const url = URL.createObjectURL(file);
+  try { const img = new Image(); img.src = url; await img.decode(); return await createImageBitmap(img); }
+  finally { URL.revokeObjectURL(url); }
+}
+
+/* ---------- geometry: rotate / flip / crop ---------- */
+const W0 = () => S.original.width, H0 = () => S.original.height;
+function rotDims() { return S.geo.rot % 180 ? [H0(), W0()] : [W0(), H0()]; }
+function natDims() { const c = S.geo.crop; return c ? [c.w, c.h] : rotDims(); }
+function drawGeo(g, src, c) {
+  const [RW, RH] = rotDims();
+  g.save();
+  g.translate(-c.x, -c.y);
+  g.translate(RW / 2, RH / 2);
+  g.scale(S.geo.flipH ? -1 : 1, S.geo.flipV ? -1 : 1);
+  g.rotate(S.geo.rot * Math.PI / 180);
+  g.drawImage(src, -W0() / 2, -H0() / 2);
+  g.restore();
+}
+// prepared-image point -> original-image point (inverse of drawGeo)
+function toOrig(px, py) {
+  const [RW, RH] = rotDims(), c = S.geo.crop || { x: 0, y: 0 };
+  const u = (px + c.x - RW / 2) / (S.geo.flipH ? -1 : 1), v = (py + c.y - RH / 2) / (S.geo.flipV ? -1 : 1);
+  const t = S.geo.rot * Math.PI / 180, cs = Math.cos(t), sn = Math.sin(t);
+  return [u * cs + v * sn + W0() / 2, -u * sn + v * cs + H0() / 2];
+}
+function applyNatural() {
+  const [nw, nh] = natDims();
+  if (S.size.natural) { S.w = nw; S.h = nh; }
+  else if (S.size.lock) S.h = clampDim(S.w * nh / nw);
+}
+
+/* ---------- cutout composition (cached) ---------- */
+const cache = { cut: {}, prep: {}, sil: {} };
+const isCut = () => S.bg.base === "cutout" && !!S.mask;
+function getCut() {
+  const key = S.maskVer + "|" + S.bg.feather;
+  if (cache.cut.key === key) return cache.cut.c;
+  const c = new OffscreenCanvas(W0(), H0()), g = c.getContext("2d");
+  if (S.bg.feather > 0) g.filter = `blur(${(S.bg.feather * Math.max(W0(), H0()) / 1500).toFixed(2)}px)`;
+  g.drawImage(S.mask, 0, 0);
+  g.filter = "none";
+  g.globalCompositeOperation = "source-in";
+  g.drawImage(S.original, 0, 0);
+  cache.cut = { key, c };
+  return c;
+}
+function prepared() {
+  const src = isCut() ? getCut() : S.original;
+  const g0 = S.geo;
+  if (!g0.rot && !g0.flipH && !g0.flipV && !g0.crop) return src;
+  const key = (isCut() ? cache.cut.key : "o") + JSON.stringify(g0);
+  if (cache.prep.key === key && cache.prep.src === src) return cache.prep.c;
+  const [nw, nh] = natDims(), c = new OffscreenCanvas(nw, nh);
+  drawGeo(c.getContext("2d"), src, g0.crop || { x: 0, y: 0 });
+  cache.prep = { key, src, c };
+  return c;
+}
+function silhouette(src) {
+  const key = src === cache.prep.c ? cache.prep.key : cache.cut.key;
+  const k = key + S.bg.outlineColor;
+  if (cache.sil.k === k && cache.sil.src === src) return cache.sil.c;
+  const c = new OffscreenCanvas(src.width, src.height), g = c.getContext("2d");
+  g.drawImage(src, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = S.bg.outlineColor; g.fillRect(0, 0, c.width, c.height);
+  cache.sil = { k, src, c };
+  return c;
+}
+function resetCaches() { cache.cut = {}; cache.prep = {}; cache.sil = {}; }
+
+/* ---------- render ---------- */
+function coverRect(iw, ih, W, H) { const s = Math.max(W / iw, H / ih); return [(W - iw * s) / 2, (H - ih * s) / 2, iw * s, ih * s]; }
+function anchor(pos, W, H, bw, bh, m) {
+  const col = pos[1], row = pos[0];
+  return [col === "l" ? m : col === "r" ? W - m - bw : (W - bw) / 2, row === "t" ? m : row === "b" ? H - m - bh : (H - bh) / 2];
+}
+let rq = 0;
+function requestRender() { if (!rq) rq = requestAnimationFrame(() => { rq = 0; render(); }); }
+
+function render() {
+  if (!S.original) return;
+  if (cropMode) return renderCrop();
+  const W = S.w, H = S.h;
+  if (out.width !== W) out.width = W;
+  if (out.height !== H) out.height = H;
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
+
+  // 1. fill
+  const forceWhite = S.fmt === "image/jpeg" && S.bg.fill === "transparent";
+  if (S.bg.fill === "color" || forceWhite) { ctx.fillStyle = forceWhite ? "#ffffff" : S.bg.fillColor; ctx.fillRect(0, 0, W, H); }
+  else if (S.bg.fill === "gradient") {
+    const [a, b] = GRADS[S.bg.grad] || GRADS[0], gr = ctx.createLinearGradient(0, 0, W * 0.3, H);
+    gr.addColorStop(0, a); gr.addColorStop(1, b); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  }
+  else if (S.bg.fill === "image" && S.fillImg) { const [x, y, w, h] = coverRect(S.fillImg.width, S.fillImg.height, W, H); ctx.drawImage(S.fillImg, x, y, w, h); }
+
+  // 2. image, resized
+  const src = prepared();
+  ctx.imageSmoothingQuality = "high";
+  const mode = S.size.lock ? "stretch" : S.size.mode;
+  let r;
+  if (mode === "stretch") r = [0, 0, W, H];
+  else if (mode === "fill") r = coverRect(src.width, src.height, W, H);
+  else { const s = Math.min(W / src.width, H / src.height); r = [(W - src.width * s) / 2, (H - src.height * s) / 2, src.width * s, src.height * s]; }
+  const [dx, dy, dw, dh] = r;
+  S.drawRect = { x: dx, y: dy, w: dw, h: dh, sw: src.width, sh: src.height };
+  const cut = isCut();
+  if (cut && (S.bg.outline > 0 || S.bg.shadow)) {
+    const layer = new OffscreenCanvas(W, H), lg = layer.getContext("2d");
+    lg.imageSmoothingQuality = "high";
+    if (S.bg.outline > 0) {
+      const sil = silhouette(src), rad = S.bg.outline * Math.min(W, H) / 200;
+      for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; lg.drawImage(sil, dx + Math.cos(a) * rad, dy + Math.sin(a) * rad, dw, dh); }
+    }
+    lg.drawImage(src, dx, dy, dw, dh);
+    ctx.save();
+    if (S.bg.shadow) { const m = Math.min(W, H); ctx.shadowColor = "rgba(0,0,0,.38)"; ctx.shadowBlur = m * 0.035; ctx.shadowOffsetY = m * 0.018; }
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
+  } else ctx.drawImage(src, dx, dy, dw, dh);
+
+  boxes = {};
+  const m = Math.round(Math.min(W, H) * 0.03);
+
+  // 3. text watermark
+  const t = S.text;
+  if (t.on && t.text.trim()) {
+    const px = Math.max(6, W * t.size / 100);
+    ctx.save();
+    ctx.globalAlpha = t.op / 100;
+    ctx.font = `${t.bold ? 700 : 500} ${px}px "${t.font}", sans-serif`;
+    ctx.fillStyle = t.color; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    if (t.shadow) { ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = px * 0.18; ctx.shadowOffsetY = px * 0.05; }
+    const tw = ctx.measureText(t.text).width, th = px * 1.2;
+    const rad = t.rot * Math.PI / 180;
+    if (t.tile) {
+      const stepX = tw + px * 3, stepY = th * 3.2, D = Math.hypot(W, H);
+      ctx.translate(W / 2, H / 2); ctx.rotate(rad || -Math.PI / 6);
+      for (let y = -D, row = 0; y < D; y += stepY, row++) for (let x = -D + (row % 2) * stepX / 2; x < D; x += stepX) ctx.fillText(t.text, x, y);
+    } else {
+      const bw = Math.abs(tw * Math.cos(rad)) + Math.abs(th * Math.sin(rad));
+      const bh = Math.abs(tw * Math.sin(rad)) + Math.abs(th * Math.cos(rad));
+      let cx, cy;
+      if (t.pos === "custom") { cx = t.x * W; cy = t.y * H; }
+      else { const [x, y] = anchor(t.pos, W, H, bw, bh, m); cx = x + bw / 2; cy = y + bh / 2; }
+      ctx.translate(cx, cy); ctx.rotate(rad); ctx.fillText(t.text, 0, 0);
+      boxes.text = { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh };
+    }
+    ctx.restore();
+  }
+
+  // 4. logo watermark
+  const L = S.logo;
+  if (L.on && S.logoImg) {
+    const lw = W * L.size / 100, lh = lw * S.logoImg.height / S.logoImg.width;
+    ctx.save(); ctx.globalAlpha = L.op / 100;
+    if (L.tile) {
+      const sx = lw * 2.2, sy = lh * 2.2;
+      for (let y = sy * 0.25, row = 0; y < H; y += sy, row++) for (let x = (row % 2) * sx / 2 - lw / 2; x < W; x += sx) ctx.drawImage(S.logoImg, x, y, lw, lh);
+    } else {
+      let x, y;
+      if (L.pos === "custom") { x = L.x * W - lw / 2; y = L.y * H - lh / 2; }
+      else [x, y] = anchor(L.pos, W, H, lw, lh, m);
+      ctx.drawImage(S.logoImg, x, y, lw, lh);
+      boxes.logo = { x, y, w: lw, h: lh };
+    }
+    ctx.restore();
+  }
+  drawOverlay();
+  if (!batchRunning) { scheduleEstimate(); scheduleCommit(); }
+}
+
+// Red preview of the "Remove objects" paint, on a separate canvas so it never ends up in the saved file.
+const ov = $("ov"), octx = ov.getContext("2d");
+function drawOverlay() {
+  if (ov.width !== out.width) ov.width = out.width;
+  if (ov.height !== out.height) ov.height = out.height;
+  octx.clearRect(0, 0, ov.width, ov.height);
+  if (!healPainted || !healMask || cropMode || batchRunning) return;
+  const d = S.drawRect, [nw, nh] = natDims();
+  const tmp = new OffscreenCanvas(nw, nh);
+  drawGeo(tmp.getContext("2d"), healMask, S.geo.crop || { x: 0, y: 0 });
+  octx.drawImage(tmp, d.x, d.y, d.w, d.h);
+}
+
+function renderCrop() {
+  const [RW, RH] = rotDims();
+  if (out.width !== RW) out.width = RW;
+  if (out.height !== RH) out.height = RH;
+  ctx.clearRect(0, 0, RW, RH);
+  drawGeo(ctx, isCut() ? getCut() : S.original, { x: 0, y: 0 });
+  const d = cropDraft, u = Math.max(RW, RH) / 500;
+  ctx.fillStyle = "rgba(0,0,0,.55)";
+  ctx.fillRect(0, 0, RW, d.y); ctx.fillRect(0, d.y + d.h, RW, RH - d.y - d.h);
+  ctx.fillRect(0, d.y, d.x, d.h); ctx.fillRect(d.x + d.w, d.y, RW - d.x - d.w, d.h);
+  ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = u;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath(); ctx.moveTo(d.x + d.w * i / 3, d.y); ctx.lineTo(d.x + d.w * i / 3, d.y + d.h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(d.x, d.y + d.h * i / 3); ctx.lineTo(d.x + d.w, d.y + d.h * i / 3); ctx.stroke();
+  }
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = u * 2; ctx.strokeRect(d.x, d.y, d.w, d.h);
+  const hs = u * 9; ctx.fillStyle = "#fff";
+  for (const [x, y] of [[d.x, d.y], [d.x + d.w, d.y], [d.x, d.y + d.h], [d.x + d.w, d.y + d.h]]) ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
+  $("dims").innerHTML = `Crop ${Math.round(d.w)} × ${Math.round(d.h)} <span>px</span>`;
+  drawOverlay();
+}
+
+/* ---------- UI sync ---------- */
+function syncUI() {
+  const o = S.original, [nw, nh] = natDims();
+  $("w").value = S.w; $("h").value = S.h; $("lock").checked = S.size.lock;
+  $("modeWrap").hidden = S.size.lock; setSeg($("modeSeg"), S.size.mode);
+  $("sizeTag").textContent = S.size.natural ? "Original size" : `${S.w}×${S.h}`;
+  if (!cropMode) $("dims").innerHTML = `${S.w} × ${S.h} <span>px</span>`;
+
+  const g = S.geo;
+  $("geoTag").textContent = [g.rot && g.rot + "°", g.flipH && "flipped ↔", g.flipV && "flipped ↕", g.crop && `crop ${g.crop.w}×${g.crop.h}`].filter(Boolean).join(", ") || "None";
+  $("cropBar").hidden = !cropMode;
+  $("cropBtn").textContent = cropMode ? "Cropping…" : g.crop ? "Change crop…" : "Crop…";
+  ["rotL", "rotR", "flipH", "flipV", "cropBtn"].forEach(id => $(id).disabled = cropMode);
+  $("ratioChips").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.r === cropRatio)));
+
+  setSeg($("modelSeg"), S.model);
+  setSeg($("baseSeg"), S.bg.base); setSeg($("fillSeg"), S.bg.fill);
+  $("baseSeg").hidden = !S.mask;
+  $("fixBox").hidden = !isCut();
+  if (!isCut() && (tool === "erase" || tool === "restore")) tool = "move";
+  setSeg($("toolSeg"), tool);
+  $("brush").value = brushSize; $("brushO").textContent = brushSize + " px";
+  $("healBrush").value = brushSize; $("healBrushO").textContent = brushSize + " px";
+  $("healPaint").setAttribute("aria-pressed", String(tool === "heal"));
+  $("healPaint").textContent = tool === "heal" ? "Painting… (click to stop)" : "Paint area";
+  $("healRun").disabled = !healPainted || healBusy || cropMode;
+  $("healClear").disabled = !healPainted || healBusy;
+  $("healTag").textContent = healPainted ? "Area painted" : "AI eraser";
+  $("feather").value = S.bg.feather; $("featherO").textContent = S.bg.feather ? S.bg.feather : "Off";
+  $("outline").value = S.bg.outline; $("outlineO").textContent = S.bg.outline ? S.bg.outline : "Off";
+  $("outlineColor").value = S.bg.outlineColor; $("shadow").checked = S.bg.shadow;
+  $("fillColorRow").hidden = S.bg.fill !== "color"; $("gradRow").hidden = S.bg.fill !== "gradient"; $("fillImgRow").hidden = S.bg.fill !== "image";
+  $("gradRow").querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-pressed", String(i === S.bg.grad)));
+  $("fillColor").value = S.bg.fillColor;
+  $("bgTag").textContent = isCut() ? "Removed" : "Original";
+  out.classList.toggle("brush", brushOn());
+  out.classList.toggle("crop", cropMode);
+
+  const t = S.text;
+  $("tOn").checked = t.on; $("tBox").hidden = !t.on; $("tText").value = t.text; $("tFont").value = t.font; $("tColor").value = t.color;
+  $("tBold").checked = t.bold; $("tShadow").checked = t.shadow; $("tTile").checked = t.tile;
+  $("tSize").value = t.size; $("tSizeO").textContent = t.size + "% of width";
+  $("tOp").value = t.op; $("tOpO").textContent = t.op + "%";
+  $("tRot").value = t.rot; $("tRotO").textContent = t.rot + "°";
+  $("tGrid").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(!t.tile && b.dataset.p === t.pos)));
+  const L = S.logo;
+  $("lOn").checked = L.on; $("lBox").hidden = !L.on; $("lTile").checked = L.tile;
+  $("lSize").value = L.size; $("lSizeO").textContent = L.size + "% of width";
+  $("lOp").value = L.op; $("lOpO").textContent = L.op + "%";
+  $("lGrid").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(!L.tile && b.dataset.p === L.pos)));
+  const wm = [t.on && "Text", L.on && "Logo"].filter(Boolean).join(" + ") || "Off";
+  $("wmTag").textContent = wm;
+
+  $("fmt").value = S.fmt; $("q").value = S.q; $("qO").textContent = S.q;
+  $("qWrap").hidden = !LOSSY.includes(S.fmt);
+  $("target").value = S.target || ""; $("target").disabled = $("fitBtn").disabled = S.fmt === "image/x-icon";
+  $("jpegNote").hidden = !(S.fmt === "image/jpeg" && S.bg.fill === "transparent" && (isCut() || ["image/png", "image/webp", "image/gif", "image/avif"].includes(S.srcType)));
+  const blocked = downloads && ["image/x-icon", "image/avif"].includes(S.fmt);
+  $("viewerNote").hidden = !blocked;
+  if (blocked) $("viewerNote").textContent = `claude.ai can only save PNG, JPEG and WebP. ${typeLabel(S.fmt)} works when this tool runs on your own website.`;
+  $("srcTag").textContent = S.isSample ? "Sample" : "Your image";
+  $("srcBadge").textContent = S.isSample ? "Sample image" : "Preview";
+  $("srcMeta").textContent = S.isSample
+    ? `Sample photo, ${o.width}×${o.height}. Add your own image to replace it.`
+    : `${S.name} · ${typeLabel(S.srcType)} · ${o.width}×${o.height} · ${fmtBytes(S.srcBytes)}`;
+  $("engine").textContent = `Engine: IMG.LY background-removal ${LIB_VERSION} · IS-Net ${S.model === "isnet_fp16" ? "fp16" : "quint8"}`;
+
+  const rule = S.size.natural ? "keeps its own size" : S.size.lock ? `becomes ${S.w} px wide (height to match)` : `becomes ${S.w}×${S.h} (${{ fit: "fit", fill: "crop to fill", stretch: "stretch" }[S.size.mode]})`;
+  $("bRule").textContent = `Each image ${rule}, saved as ${typeLabel(S.fmt)}${S.target ? `, max ${S.target} KB` : ""}. Watermark: ${wm}.`;
+  $("batchTag").textContent = queue.length + (queue.length === 1 ? " image" : " images");
+  $("bRun").disabled = !queue.length || batchRunning;
+  $("bRun").textContent = queue.length ? `Process ${queue.length} image${queue.length === 1 ? "" : "s"}` : "Process images";
+  syncHist();
+}
+
+/* ---------- encoding ---------- */
+function toBlob(type, q) { return new Promise((res, rej) => out.toBlob(b => b ? res(b) : rej(new Error("encode failed")), type, q)); }
+async function buildIco() {
+  const sizes = [16, 24, 32, 48, 64, 128, 256], pngs = [];
+  for (const s of sizes) {
+    const c = new OffscreenCanvas(s, s), g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    const k = Math.min(s / out.width, s / out.height), w = out.width * k, h = out.height * k;
+    g.drawImage(out, (s - w) / 2, (s - h) / 2, w, h);
+    pngs.push(new Uint8Array(await (await c.convertToBlob({ type: "image/png" })).arrayBuffer()));
+  }
+  const n = sizes.length, head = new DataView(new ArrayBuffer(6 + 16 * n));
+  head.setUint16(2, 1, true); head.setUint16(4, n, true);
+  let off = 6 + 16 * n;
+  sizes.forEach((s, i) => {
+    const o = 6 + 16 * i;
+    head.setUint8(o, s >= 256 ? 0 : s); head.setUint8(o + 1, s >= 256 ? 0 : s);
+    head.setUint16(o + 4, 1, true); head.setUint16(o + 6, 32, true);
+    head.setUint32(o + 8, pngs[i].length, true); head.setUint32(o + 12, off, true);
+    off += pngs[i].length;
+  });
+  return new Blob([head.buffer, ...pngs], { type: "image/x-icon" });
+}
+function encode(fmt = S.fmt, q = S.q) { return fmt === "image/x-icon" ? buildIco() : toBlob(fmt, q / 100); }
+
+let estTimer = 0, estSeq = 0;
+function scheduleEstimate() {
+  clearTimeout(estTimer);
+  $("sizeInfo").textContent = "Output size: calculating…";
+  estTimer = setTimeout(async () => {
+    const seq = ++estSeq;
+    try {
+      const b = await encode();
+      if (seq !== estSeq) return;
+      const from = S.isSample ? "" : `Original ${typeLabel(S.srcType)} ${fmtBytes(S.srcBytes)} → `;
+      let delta = "";
+      if (!S.isSample && S.srcBytes) { const d = Math.round((1 - b.size / S.srcBytes) * 100); delta = d >= 0 ? ` (${d}% smaller)` : ` (${-d}% larger)`; }
+      let txt = `${from}${typeLabel(b.type)} ${fmtBytes(b.size)}${delta}`;
+      if (b.type !== S.fmt) txt += ` · this browser can't encode ${typeLabel(S.fmt)}`;
+      if (S.target && S.fmt !== "image/x-icon" && b.size > S.target * 1024) txt += ` · over your ${S.target} KB limit, click Fit under limit`;
+      $("sizeInfo").textContent = txt;
+    } catch { $("sizeInfo").textContent = ""; }
+  }, 350);
+}
+
+/* Compress to a maximum file size: search quality first, then shrink the dimensions. */
+async function fitTarget() {
+  const target = S.target * 1024;
+  if (!target || S.fmt === "image/x-icon") return { ok: true, blob: await encode() };
+  const lossy = LOSSY.includes(S.fmt);
+  for (let round = 0; round < 16; round++) {
+    if (lossy) {
+      let lo = 10, hi = 95, best = null;
+      const bl = await encode(S.fmt, lo);
+      if (bl.size <= target) {
+        best = { q: lo, b: bl };
+        const bh = await encode(S.fmt, hi);
+        if (bh.size <= target) best = { q: hi, b: bh };
+        else while (hi - lo > 2) { const mid = (lo + hi) >> 1, bm = await encode(S.fmt, mid); if (bm.size <= target) { lo = mid; best = { q: mid, b: bm }; } else hi = mid; }
+        S.q = best.q;
+        return { ok: true, blob: best.b };
+      }
+    } else {
+      const b = await encode();
+      if (b.size <= target) return { ok: true, blob: b };
+    }
+    const b = await encode(S.fmt, lossy ? 10 : S.q);
+    const k = clamp(Math.sqrt(target / b.size) * 0.95, 0.5, 0.92);
+    if (S.w * k < 16 || S.h * k < 16) break;
+    S.w = clampDim(S.w * k); S.h = clampDim(S.h * k); S.size.natural = false;
+    render();
+  }
+  return { ok: false, blob: await encode() };
+}
+$("fitBtn").addEventListener("click", async () => {
+  const st = $("fitStatus"); st.className = "status";
+  if (!S.target) { st.textContent = "Enter a size in KB first."; return; }
+  if (cropMode) return;
+  $("fitBtn").disabled = true; st.textContent = "Compressing…";
+  try {
+    const r = await fitTarget();
+    syncUI(); render();
+    st.className = "status " + (r.ok ? "ok" : "err");
+    st.textContent = r.ok
+      ? `Fits: ${fmtBytes(r.blob.size)}${LOSSY.includes(S.fmt) ? `, quality ${S.q}` : ""}, ${S.w}×${S.h}.`
+      : `Couldn't get under ${S.target} KB. Try WebP or JPEG, or a smaller size.`;
+  } finally { $("fitBtn").disabled = false; }
+});
+
+/* ---------- undo / redo ---------- */
+const hist = { stack: [], i: -1, restoring: false };
+let commitTimer = 0;
+const snapJSON = () => JSON.stringify({ bg: S.bg, geo: S.geo, size: S.size, w: S.w, h: S.h, text: S.text, logo: S.logo, fmt: S.fmt, q: S.q, target: S.target });
+function scheduleCommit() {
+  if (hist.restoring || batchRunning || cropMode) return;
+  clearTimeout(commitTimer); commitTimer = setTimeout(commit, 350);
+}
+function commit() {
+  const json = snapJSON(), cur = hist.stack[hist.i];
+  if (cur && cur.json === json && cur.maskVer === S.maskVer && cur.orig === S.original) return;
+  const maskRef = cur && cur.maskVer === S.maskVer ? cur.maskRef : (S.mask ? S.mask.convertToBlob({ type: "image/png" }) : null);
+  hist.stack = hist.stack.slice(0, hist.i + 1);
+  // orig: the image itself (changes after Remove objects); bitmaps never change, so keep the reference
+  hist.stack.push({ json, maskVer: S.maskVer, maskRef, orig: S.original });
+  if (hist.stack.length > 40) hist.stack.shift();
+  hist.i = hist.stack.length - 1;
+  syncHist(); saveSettings();
+}
+function resetHistory() { clearTimeout(commitTimer); hist.stack = []; hist.i = -1; }
+async function goto(i) {
+  if (i < 0 || i >= hist.stack.length || cropMode) return;
+  clearTimeout(commitTimer);
+  hist.i = i; hist.restoring = true;
+  const e = hist.stack[i];
+  Object.assign(S, JSON.parse(e.json));
+  if (e.orig && e.orig !== S.original) { S.original = e.orig; healMask = null; healPainted = false; resetCaches(); }
+  if (e.maskVer !== S.maskVer) {
+    if (e.maskRef) {
+      const bmp = await createImageBitmap(await e.maskRef);
+      if (!S.mask) S.mask = new OffscreenCanvas(W0(), H0());
+      const g = S.mask.getContext("2d"); g.clearRect(0, 0, S.mask.width, S.mask.height); g.drawImage(bmp, 0, 0);
+    } else S.mask = null;
+    S.maskVer = e.maskVer; resetCaches();
+  }
+  syncUI(); render(); hist.restoring = false; syncHist();
+}
+function syncHist() { $("undo").disabled = hist.i <= 0 || cropMode; $("redo").disabled = hist.i >= hist.stack.length - 1 || cropMode; }
+$("undo").addEventListener("click", () => goto(hist.i - 1));
+$("redo").addEventListener("click", () => goto(hist.i + 1));
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && cropMode) { cancelCrop(); return; }
+  if (!(e.ctrlKey || e.metaKey) || e.target.matches("input[type=text], input[type=number]")) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); goto(hist.i - 1); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); goto(hist.i + 1); }
+});
+
+/* ---------- remembered settings ---------- */
+const SETTINGS_KEY = "cutout-studio-settings";
+function saveSettings() {
+  store.set(SETTINGS_KEY, {
+    text: S.text, logo: S.logo, fmt: S.fmt, q: S.q, target: S.target, model: S.model,
+    bg: { fill: S.bg.fill, fillColor: S.bg.fillColor, grad: S.bg.grad, feather: S.bg.feather, outline: S.bg.outline, outlineColor: S.bg.outlineColor, shadow: S.bg.shadow },
+  });
+}
+async function loadSettings() {
+  const s = store.get(SETTINGS_KEY); if (!s) return;
+  if (s.text) S.text = { ...DEF.text, ...s.text };
+  if (s.logo) S.logo = { ...DEF.logo, ...s.logo };
+  if (s.bg) S.bg = { ...S.bg, ...s.bg, fill: s.bg.fill === "image" ? "transparent" : s.bg.fill };
+  for (const k of ["fmt", "q", "target", "model"]) if (s[k] !== undefined) S[k] = s[k];
+  const logo = store.get(SETTINGS_KEY + "-logo");
+  if (logo?.data) try { const img = new Image(); img.src = logo.data; await img.decode(); S.logoImg = await createImageBitmap(img); $("lMeta").textContent = logo.name || "Saved logo"; } catch {}
+}
+
+/* ---------- loading images ---------- */
+function resetForNewImage(bmp) {
+  S.original = bmp; S.mask = null; S.maskVer = ++maskSeq; S.bg.base = "original";
+  S.geo = clone(DEF.geo); S.size.natural = true; S.w = bmp.width; S.h = bmp.height;
+  tool = "move"; resetCaches();
+  healMask = null; healPainted = false;
+}
+async function loadMain(file) {
+  try {
+    $("srcMeta").textContent = isHeic(file) ? "Converting HEIC photo…" : "Opening…";
+    const bmp = await decode(file);
+    if (cropMode) { cropMode = false; }
+    resetForNewImage(bmp);
+    S.name = (file.name || "pasted-image").replace(/\.[^.]+$/, ""); S.srcType = file.type || (isHeic(file) ? "image/heic" : ""); S.srcBytes = file.size; S.isSample = false;
+    if (["image/png", "image/jpeg", "image/webp"].includes(file.type)) S.fmt = file.type;
+    $("rmStatus").textContent = "Ready. Click Remove background to cut out the subject.";
+    $("rmStatus").className = "status";
+    resetHistory(); syncUI(); render();
+  } catch (err) {
+    $("srcMeta").textContent = "This file couldn't be opened as an image" + (isHeic(file) ? " (HEIC conversion failed)" : "") + ". Try a PNG, JPEG or WebP.";
+  }
+}
+function takeFiles(list) {
+  const files = [...list].filter(f => f.type.startsWith("image/") || isHeic(f));
+  if (!files.length) return;
+  if (files.length === 1) loadMain(files[0]);
+  else { addToQueue(files); $("batchSec").open = true; $("batchSec").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+}
+$("file").addEventListener("change", e => { takeFiles(e.target.files); e.target.value = ""; });
+function dropZone(el, fn) {
+  ["dragenter", "dragover"].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); el.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove("over"); }));
+  el.addEventListener("drop", e => { e.stopPropagation(); fn(e.dataTransfer.files); });
+}
+dropZone($("drop"), takeFiles);
+dropZone($("bDrop"), (files) => addToQueue([...files].filter(f => f.type.startsWith("image/") || isHeic(f))));
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); takeFiles(e.dataTransfer.files); });
+document.addEventListener("paste", e => {
+  if (e.target.matches("input[type=text], input[type=number]")) return;
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (item) { e.preventDefault(); loadMain(item.getAsFile()); }
+});
+$("fillFile").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; S.fillImg = await decode(f); $("fillMeta").textContent = f.name; render(); e.target.value = ""; });
+$("lFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  S.logoImg = await decode(f); $("lMeta").textContent = f.name; S.logo.on = true; syncUI(); render(); e.target.value = "";
+  if (f.size < 1.5e6) { const r = new FileReader(); r.onload = () => store.set(SETTINGS_KEY + "-logo", { name: f.name, data: r.result }); r.readAsDataURL(f); }
+});
+
+/* ---------- background removal ---------- */
+// Keep model files in Cache Storage so a reload or later visit doesn't download them again.
+let fetchedFromNetwork = false;
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input?.url || String(input);
+  if (!/\/bgdata\/|\/models\/|background-removal-data/.test(url) || !window.caches) return nativeFetch(input, init);
+  try {
+    const c = await caches.open(MODEL_CACHE);
+    const hit = await c.match(url);
+    if (hit) return hit;
+    fetchedFromNetwork = true;
+    const res = await nativeFetch(input, init);
+    if (res.ok) await c.put(url, res.clone()).catch(() => {});
+    return res;
+  } catch { fetchedFromNetwork = true; return nativeFetch(input, init); }
+};
+// Drop caches left by older model versions.
+(async () => { try { for (const k of await caches.keys()) if (k.startsWith("cutout-model-") && k !== MODEL_CACHE) await caches.delete(k); } catch {} })();
+
+// AI engine: the local bundle built by tools/build-vendor.mjs, or the CDN when that isn't there.
+let enginePromise = null;
+function loadEngine() {
+  enginePromise ??= import("./vendor/engine.mjs")
+    .catch(() => import(`https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/+esm`).then(m => ({ removeBackground: m.removeBackground, ort: null })))
+    .catch(e => { enginePromise = null; throw e; });
+  return enginePromise;
+}
+const loadRemover = loadEngine;
+
+/* ---------- remove objects (MI-GAN inpainting) ---------- */
+let miganPromise = null;
+function loadMigan(st) {
+  miganPromise ??= (async () => {
+    const { ort } = await loadEngine();
+    if (!ort) throw new Error("Object removal needs the local version. Open it with start.bat");
+    // CPU build of the runtime (the same files the background remover uses)
+    ort.env.wasm.wasmPaths = {
+      mjs: new URL("vendor/ort/ort-wasm-simd-threaded.mjs", location.href).href,
+      wasm: new URL("vendor/ort/ort-wasm-simd-threaded.wasm", location.href).href,
+    };
+    st.textContent = "Loading the eraser model…";
+    const res = await fetch("models/migan_pipeline_v2.onnx");
+    if (!res.ok) throw new Error("Eraser model not found (models/migan_pipeline_v2.onnx)");
+    const buf = await res.arrayBuffer();
+    return ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
+  })().catch(e => { miganPromise = null; throw e; });
+  return miganPromise;
+}
+async function healRun() {
+  if (!healPainted || healBusy) return;
+  const st = $("healStatus");
+  healBusy = true; if (tool === "heal") tool = "move"; syncUI();
+  st.className = "status"; $("healProg").hidden = false; $("healBar").style.width = "15%";
+  try {
+    const session = await loadMigan(st);
+    const { ort } = await loadEngine();
+    $("healBar").style.width = "45%"; st.textContent = "Filling the painted area…";
+    const W = W0(), H = H0(), N = W * H;
+    const c = new OffscreenCanvas(W, H), g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(S.original, 0, 0);
+    const px = g.getImageData(0, 0, W, H);
+    const hm = healMask.getContext("2d").getImageData(0, 0, W, H).data;
+    const img = new Uint8Array(3 * N), mask = new Uint8Array(N);
+    for (let i = 0, j = 0; i < N; i++, j += 4) {
+      img[i] = px.data[j]; img[N + i] = px.data[j + 1]; img[2 * N + i] = px.data[j + 2];
+      mask[i] = hm[j + 3] > 10 ? 0 : 255; // 0 = fill this pixel, 255 = keep
+    }
+    const t0 = performance.now();
+    const outT = (await session.run({
+      image: new ort.Tensor("uint8", img, [1, 3, H, W]),
+      mask: new ort.Tensor("uint8", mask, [1, 1, H, W]),
+    })).result.data;
+    for (let i = 0, j = 0; i < N; i++, j += 4) { px.data[j] = outT[i]; px.data[j + 1] = outT[N + i]; px.data[j + 2] = outT[2 * N + i]; } // alpha stays
+    g.putImageData(px, 0, 0);
+    S.original = await createImageBitmap(c);
+    healMask = null; healPainted = false; resetCaches();
+    $("healBar").style.width = "100%";
+    st.className = "status ok";
+    st.textContent = `Removed in ${((performance.now() - t0) / 1000).toFixed(1)} s. Paint again to touch up, or Undo.`;
+  } catch (err) {
+    console.error(err);
+    st.className = "status err";
+    st.textContent = "Object removal failed: " + (err?.message || err);
+  } finally {
+    healBusy = false; setTimeout(() => { $("healProg").hidden = true; }, 600);
+    syncUI(); render();
+  }
+}
+$("healPaint").addEventListener("click", () => { if (cropMode) return; tool = tool === "heal" ? "move" : "heal"; syncUI(); });
+$("healRun").addEventListener("click", healRun);
+$("healClear").addEventListener("click", () => { healMask = null; healPainted = false; syncUI(); drawOverlay(); });
+$("healBrush").addEventListener("input", e => { brushSize = +e.target.value; $("healBrushO").textContent = brushSize + " px"; });
+
+function progressTo(bar, st) {
+  const seen = {};
+  fetchedFromNetwork = false;
+  return (key, cur, total) => {
+    if (!total) return;
+    if (key.startsWith("fetch:")) {
+      seen[key] = [cur, total];
+      const [c, t] = Object.values(seen).reduce((a, [c, t]) => [a[0] + c, a[1] + t], [0, 0]);
+      if (bar) bar.style.width = Math.max(2, Math.round(c / t * 100)) + "%";
+      st.textContent = fetchedFromNetwork ? `Downloading model (first time only): ${fmtBytes(c)} of ${fmtBytes(t)}` : "Loading the saved model from this device…";
+    } else {
+      if (bar) bar.style.width = Math.round((cur + 1) / total * 100) + "%";
+      st.textContent = `Removing background… step ${Math.min(cur + 1, total)} of ${total}`;
+    }
+  };
+}
+let progressSink = () => {};
+const progressProxy = (...a) => progressSink(...a);
+async function removeFrom(bmp, progress) {
+  const { removeBackground } = await loadRemover();
+  const src = new OffscreenCanvas(bmp.width, bmp.height);
+  src.getContext("2d").drawImage(bmp, 0, 0);
+  const blob = await src.convertToBlob({ type: "image/png" });
+  // The library caches its config (progress callback included) from the first call, so pass one
+  // stable function and point it at this run's handler.
+  progressSink = progress;
+  const config = { model: S.model, device: "cpu", output: { format: "image/png" }, progress: progressProxy };
+  // Published page: model files are hosted next to the page. Local file: use the library's own CDN.
+  if (location.protocol !== "file:") config.publicPath = new URL("bgdata/", location.href).href;
+  const cut = await createImageBitmap(await removeBackground(blob, config));
+  const m = new OffscreenCanvas(bmp.width, bmp.height), g = m.getContext("2d");
+  g.drawImage(cut, 0, 0, bmp.width, bmp.height);
+  g.globalCompositeOperation = "source-in"; g.fillStyle = "#fff"; g.fillRect(0, 0, m.width, m.height);
+  return m;
+}
+$("rmBtn").addEventListener("click", async () => {
+  if (cropMode) cancelCrop();
+  const btn = $("rmBtn"), st = $("rmStatus");
+  btn.disabled = true; st.className = "status"; $("rmProg").hidden = false; $("rmBar").style.width = "2%";
+  st.textContent = "Loading the background-removal model…";
+  try {
+    const t0 = performance.now();
+    S.mask = await removeFrom(S.original, progressTo($("rmBar"), st));
+    S.maskVer = ++maskSeq; S.bg.base = "cutout"; resetCaches();
+    $("rmBar").style.width = "100%";
+    st.className = "status ok";
+    st.textContent = `Background removed in ${((performance.now() - t0) / 1000).toFixed(1)} s. Use Erase and Restore to touch it up.`;
+    syncUI(); render();
+  } catch (err) {
+    console.error(err);
+    st.className = "status err";
+    st.textContent = "Background removal couldn't run in this browser (" + (err?.message || err) + "). Everything else still works.";
+  } finally {
+    btn.disabled = false; setTimeout(() => { $("rmProg").hidden = true; }, 600);
+  }
+});
+
+/* ---------- controls ---------- */
+bindSeg($("modelSeg"), v => { S.model = v; syncUI(); saveSettings(); $("rmStatus").className = "status"; $("rmStatus").textContent = v === "isnet_fp16" ? "Best quality: cleanest edges, takes a few seconds longer." : "Fast: quicker, but may leave specks of background."; });
+bindSeg($("baseSeg"), v => { S.bg.base = v; syncUI(); render(); });
+bindSeg($("fillSeg"), v => { S.bg.fill = v; syncUI(); render(); });
+bindSeg($("modeSeg"), v => { S.size.mode = v; syncUI(); render(); });
+bindSeg($("toolSeg"), v => { tool = v; syncUI(); });
+const SW = ["#ffffff", "#000000", "#f2efe9", "#e7eef7", "#2f55d4", "#1f7a4d", "#d93b3b"];
+$("fillSwatches").innerHTML = SW.map(c => `<button class="sw" data-c="${c}" style="background:${c}" aria-label="Fill ${c}"></button>`).join("");
+$("fillSwatches").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.bg.fillColor = b.dataset.c; syncUI(); render(); });
+$("fillColor").addEventListener("input", e => { S.bg.fillColor = e.target.value; render(); });
+$("gradRow").innerHTML = GRADS.map(([a, b], i) => `<button class="sw" data-i="${i}" style="background:linear-gradient(160deg,${a},${b})" aria-label="Gradient ${i + 1}"></button>`).join("");
+$("gradRow").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.bg.grad = +b.dataset.i; syncUI(); render(); });
+$("brush").addEventListener("input", e => { brushSize = +e.target.value; $("brushO").textContent = brushSize + " px"; });
+$("feather").addEventListener("input", e => { S.bg.feather = +e.target.value; syncUI(); render(); });
+$("outline").addEventListener("input", e => { S.bg.outline = +e.target.value; syncUI(); render(); });
+$("outlineColor").addEventListener("input", e => { S.bg.outlineColor = e.target.value; render(); });
+$("shadow").addEventListener("change", e => { S.bg.shadow = e.target.checked; render(); });
+
+function setW(v) { const [nw, nh] = natDims(); S.w = clampDim(v); if (S.size.lock) S.h = clampDim(S.w * nh / nw); S.size.natural = false; }
+function setH(v) { const [nw, nh] = natDims(); S.h = clampDim(v); if (S.size.lock) S.w = clampDim(S.h * nw / nh); S.size.natural = false; }
+$("w").addEventListener("change", e => { setW(+e.target.value); syncUI(); render(); });
+$("h").addEventListener("change", e => { setH(+e.target.value); syncUI(); render(); });
+$("lock").addEventListener("change", e => { S.size.lock = e.target.checked; if (S.size.lock) { const n = S.size.natural; setW(S.w); S.size.natural = n; } syncUI(); render(); });
+$("scaleChips").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const s = +b.dataset.s, [nw, nh] = natDims();
+  S.size.lock = true; S.size.natural = s === 1; S.w = clampDim(nw * s); S.h = clampDim(nh * s); syncUI(); render();
+});
+$("presetChips").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.size.lock = false; S.size.natural = false; S.w = +b.dataset.w; S.h = +b.dataset.h;
+  if (b.dataset.h === "531") S.size.mode = "fill";
+  syncUI(); render();
+});
+
+const bindT = (id, key, conv = v => v) => $(id).addEventListener("input", e => { S.text[key] = conv(e.target.type === "checkbox" ? e.target.checked : e.target.value); syncUI(); render(); });
+bindT("tOn", "on"); bindT("tText", "text"); bindT("tColor", "color"); bindT("tBold", "bold"); bindT("tShadow", "shadow"); bindT("tTile", "tile");
+bindT("tSize", "size", Number); bindT("tOp", "op", Number); bindT("tRot", "rot", Number);
+$("tFont").addEventListener("change", async e => { S.text.font = e.target.value; try { await document.fonts.load(`700 40px "${S.text.font}"`); } catch {} render(); });
+const bindL = (id, key, conv = v => v) => $(id).addEventListener("input", e => { S.logo[key] = conv(e.target.type === "checkbox" ? e.target.checked : e.target.value); syncUI(); render(); });
+bindL("lOn", "on"); bindL("lTile", "tile"); bindL("lSize", "size", Number); bindL("lOp", "op", Number);
+buildGrid($("tGrid"), "text"); buildGrid($("lGrid"), "logo");
+
+$("fmt").addEventListener("change", e => { S.fmt = e.target.value; syncUI(); render(); });
+$("q").addEventListener("input", e => { S.q = +e.target.value; $("qO").textContent = S.q; scheduleEstimate(); scheduleCommit(); });
+$("target").addEventListener("change", e => { S.target = Math.max(0, Math.round(+e.target.value || 0)); $("fitStatus").textContent = ""; syncUI(); scheduleEstimate(); scheduleCommit(); });
+
+document.querySelectorAll("[data-reset]").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.reset;
+  if (k === "bg") { S.bg = { ...clone(DEF.bg), base: S.mask ? "cutout" : "original" }; }
+  if (k === "size") { S.size = clone(DEF.size); applyNatural(); }
+  if (k === "wm") { S.text = clone(DEF.text); S.logo = clone(DEF.logo); }
+  if (k === "geo") { if (cropMode) cropMode = false; S.geo = clone(DEF.geo); applyNatural(); }
+  syncUI(); render();
+}));
+
+/* ---------- rotate / flip / crop ---------- */
+$("rotL").addEventListener("click", () => { S.geo.rot = (S.geo.rot + 270) % 360; S.geo.crop = null; applyNatural(); syncUI(); render(); });
+$("rotR").addEventListener("click", () => { S.geo.rot = (S.geo.rot + 90) % 360; S.geo.crop = null; applyNatural(); syncUI(); render(); });
+$("flipH").addEventListener("click", () => { const [RW] = rotDims(), c = S.geo.crop; S.geo.flipH = !S.geo.flipH; if (c) c.x = RW - c.x - c.w; syncUI(); render(); });
+$("flipV").addEventListener("click", () => { const [, RH] = rotDims(), c = S.geo.crop; S.geo.flipV = !S.geo.flipV; if (c) c.y = RH - c.y - c.h; syncUI(); render(); });
+$("cropBtn").addEventListener("click", () => {
+  const [RW, RH] = rotDims();
+  cropDraft = S.geo.crop ? { ...S.geo.crop } : { x: 0, y: 0, w: RW, h: RH };
+  cropRatio = 0; cropMode = true; syncUI(); render();
+  $("cropBar").scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+function cancelCrop() { cropMode = false; syncUI(); render(); }
+$("cropCancel").addEventListener("click", cancelCrop);
+$("cropApply").addEventListener("click", () => {
+  const [RW, RH] = rotDims(), d = cropDraft;
+  const r = { x: Math.round(d.x), y: Math.round(d.y), w: Math.round(d.w), h: Math.round(d.h) };
+  cropMode = false;
+  if (r.w >= 4 && r.h >= 4) S.geo.crop = (r.x === 0 && r.y === 0 && r.w === RW && r.h === RH) ? null : r;
+  applyNatural(); syncUI(); render();
+});
+$("ratioChips").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  cropRatio = +b.dataset.r;
+  if (cropRatio) { const [RW, RH] = rotDims(); let w = RW, h = RW / cropRatio; if (h > RH) { h = RH; w = RH * cropRatio; } cropDraft = { x: (RW - w) / 2, y: (RH - h) / 2, w, h }; }
+  syncUI(); render();
+});
+
+/* ---------- pointer: crop box, brush, watermark drag ---------- */
+const scr = () => out.width / out.getBoundingClientRect().width; // canvas px per screen px
+function toCanvas(e) { const r = out.getBoundingClientRect(); return [(e.clientX - r.left) * out.width / r.width, (e.clientY - r.top) * out.height / r.height]; }
+function hit(x, y) { for (const k of ["logo", "text"]) { const b = boxes[k]; if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return k; } return null; }
+function brushOn() { return !cropMode && !healBusy && (tool === "heal" || ((tool === "erase" || tool === "restore") && isCut())); }
+let drag = null, paint = null, cdrag = null;
+
+function stamp(g, x, y, r) {
+  const gr = g.createRadialGradient(x, y, r * 0.55, x, y, r);
+  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+}
+function paintTo(x, y) {
+  const d = S.drawRect, sx = d.sw / d.w, sy = d.sh / d.h;
+  const p = [(x - d.x) * sx, (y - d.y) * sy];
+  const r = Math.max(1, brushSize / 2 * scr() * sx);
+  if (!Number.isFinite(r) || !Number.isFinite(p[0])) return;
+  const heal = tool === "heal";
+  if (heal && !healMask) healMask = new OffscreenCanvas(W0(), H0());
+  const g = (heal ? healMask : S.mask).getContext("2d");
+  g.save(); g.globalCompositeOperation = tool === "erase" ? "destination-out" : "source-over";
+  const from = paint.last || p, dist = Math.hypot(p[0] - from[0], p[1] - from[1]);
+  const steps = paint.last ? Math.max(1, Math.ceil(dist / (r / 4))) : 1;
+  for (let i = 1; i <= steps; i++) {
+    const [ox, oy] = toOrig(from[0] + (p[0] - from[0]) * i / steps, from[1] + (p[1] - from[1]) * i / steps);
+    if (heal) { g.fillStyle = "#ff2d2d"; g.beginPath(); g.arc(ox, oy, r, 0, Math.PI * 2); g.fill(); } // hard edge: exact area to fill
+    else stamp(g, ox, oy, r);
+  }
+  g.restore();
+  paint.last = p;
+  if (heal) { if (!healPainted) { healPainted = true; syncUI(); } drawOverlay(); }
+  else { S.maskVer = ++maskSeq; requestRender(); }
+}
+function cropDown(x, y) {
+  const d = cropDraft, tol = 22 * scr();
+  const corners = [[d.x, d.y], [d.x + d.w, d.y], [d.x, d.y + d.h], [d.x + d.w, d.y + d.h]];
+  const i = corners.findIndex(([cx, cy]) => Math.abs(cx - x) < tol && Math.abs(cy - y) < tol);
+  if (i >= 0) { const [ax, ay] = corners[3 - i]; cdrag = { mode: "size", ax, ay }; }
+  else if (x > d.x && x < d.x + d.w && y > d.y && y < d.y + d.h) cdrag = { mode: "move", ox: x - d.x, oy: y - d.y };
+  else cdrag = { mode: "size", ax: x, ay: y };
+}
+function cropMove(x, y) {
+  const [RW, RH] = rotDims(), d = cropDraft;
+  x = clamp(x, 0, RW); y = clamp(y, 0, RH);
+  if (cdrag.mode === "move") { d.x = clamp(x - cdrag.ox, 0, RW - d.w); d.y = clamp(y - cdrag.oy, 0, RH - d.h); }
+  else {
+    let w = Math.abs(x - cdrag.ax), h = Math.abs(y - cdrag.ay);
+    if (cropRatio) { if (w / Math.max(h, 1e-6) > cropRatio) w = h * cropRatio; else h = w / cropRatio; }
+    cropDraft = { x: x < cdrag.ax ? cdrag.ax - w : cdrag.ax, y: y < cdrag.ay ? cdrag.ay - h : cdrag.ay, w, h };
+  }
+  requestRender();
+}
+function moveCursor(e) {
+  const cur = $("brushCur");
+  if (!brushOn()) { cur.hidden = true; return; }
+  const b = $("box").getBoundingClientRect();
+  cur.hidden = false; cur.style.left = (e.clientX - b.left) + "px"; cur.style.top = (e.clientY - b.top) + "px";
+  cur.style.width = cur.style.height = brushSize + "px";
+}
+out.addEventListener("pointerdown", e => {
+  const [x, y] = toCanvas(e);
+  if (cropMode) cropDown(x, y);
+  else if (brushOn()) { paint = { last: null }; paintTo(x, y); }
+  else { const k = hit(x, y); if (!k) return; const b = boxes[k]; drag = { k, dx: x - (b.x + b.w / 2), dy: y - (b.y + b.h / 2) }; }
+  out.setPointerCapture(e.pointerId); e.preventDefault();
+});
+out.addEventListener("pointermove", e => {
+  moveCursor(e);
+  const [x, y] = toCanvas(e);
+  if (cdrag) return cropMove(x, y);
+  if (paint) return paintTo(x, y);
+  if (drag) {
+    const L = S[drag.k];
+    L.pos = "custom"; L.x = clamp((x - drag.dx) / out.width, 0, 1); L.y = clamp((y - drag.dy) / out.height, 0, 1);
+    requestRender(); return;
+  }
+  if (!cropMode && !brushOn()) out.classList.toggle("grab", !!hit(x, y));
+});
+const endPointer = () => { if (drag || paint) { drag = null; paint = null; syncUI(); scheduleCommit(); } cdrag = null; };
+out.addEventListener("pointerup", endPointer); out.addEventListener("pointercancel", endPointer);
+out.addEventListener("pointerleave", () => { $("brushCur").hidden = true; });
+
+/* ---------- saving files ---------- */
+let downloads = null;
+(async () => {
+  try { downloads = window.claude?.use ? await window.claude.use("downloads") : null; } catch { downloads = null; }
+  if (downloads) syncUI();
+})();
+async function saveFile(filename, blob) {
+  if (downloads) { await downloads.save({ filename, data: blob }); return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const suffix = () => isCut() ? "-cutout" : "-edited";
+$("dl").addEventListener("click", async () => {
+  const st = $("dlStatus"); st.className = "status";
+  if (cropMode) { st.textContent = "Apply or cancel the crop first."; return; }
+  try {
+    const blob = S.target ? (await fitTarget()).blob : await encode();
+    syncUI();
+    const filename = `${S.name}${suffix()}.${EXT[blob.type] || EXT[S.fmt]}`;
+    await saveFile(filename, blob);
+    st.className = "status ok"; st.textContent = `Saved ${filename} (${fmtBytes(blob.size)}).`;
+  } catch (err) {
+    if (err?.code === "declined") { st.textContent = "Download cancelled."; return; }
+    st.className = "status err";
+    st.textContent = err?.code === "rejected_extension" || err?.code === "extension_not_enabled"
+      ? `claude.ai can't save ${typeLabel(S.fmt)} files. Pick PNG, JPEG or WebP here.`
+      : "The file couldn't be saved: " + (err?.message || err);
+  }
+});
+
+/* ---------- batch ---------- */
+const queue = [];
+function addToQueue(files) {
+  for (const f of files) queue.push({ file: f, status: "Waiting", cls: "" });
+  drawQueue(); syncUI();
+}
+function drawQueue() {
+  $("queue").innerHTML = queue.map((q, i) => `<li><span class="n" title="${q.file.name.replace(/"/g, "&quot;")}"></span><span class="s ${q.cls}">${q.status}</span><button data-i="${i}" aria-label="Remove from batch" ${batchRunning ? "disabled" : ""}>×</button></li>`).join("");
+  $("queue").querySelectorAll(".n").forEach((el, i) => el.textContent = queue[i].file.name);
+}
+$("queue").addEventListener("click", e => { const b = e.target.closest("button"); if (!b || batchRunning) return; queue.splice(+b.dataset.i, 1); drawQueue(); syncUI(); });
+$("bFiles").addEventListener("change", e => { addToQueue([...e.target.files]); e.target.value = ""; });
+$("bClear").addEventListener("click", () => { if (batchRunning) return; queue.length = 0; drawQueue(); syncUI(); $("bStatus").textContent = ""; });
+
+$("bRun").addEventListener("click", async () => {
+  if (!queue.length || batchRunning) return;
+  if (cropMode) cancelCrop();
+  const st = $("bStatus"); st.className = "status";
+  const keep = { original: S.original, mask: S.mask, maskVer: S.maskVer, name: S.name, srcType: S.srcType, srcBytes: S.srcBytes, isSample: S.isSample, geo: clone(S.geo), size: clone(S.size), w: S.w, h: S.h, q: S.q, base: S.bg.base };
+  const rule = S.size.natural ? "natural" : S.size.lock ? "width" : "exact", tw = S.w, th = S.h;
+  const withRm = $("bRm").checked;
+  batchRunning = true; syncUI(); drawQueue();
+  $("bProg").hidden = false; $("bBar").style.width = "0%";
+  const results = [], used = new Set();
+  for (let i = 0; i < queue.length; i++) {
+    const item = queue[i];
+    item.status = "Working…"; item.cls = ""; drawQueue();
+    try {
+      const bmp = await decode(item.file);
+      resetForNewImage(bmp);
+      if (withRm) { S.mask = await removeFrom(bmp, progressTo(null, st)); S.maskVer = ++maskSeq; S.bg.base = "cutout"; resetCaches(); }
+      if (rule === "width") { S.w = tw; S.h = clampDim(tw * bmp.height / bmp.width); S.size.natural = false; }
+      else if (rule === "exact") { S.w = tw; S.h = th; S.size.natural = false; S.size.lock = false; S.size.mode = keep.size.mode; }
+      S.q = keep.q;
+      render();
+      const blob = S.target ? (await fitTarget()).blob : await encode();
+      let name = `${item.file.name.replace(/\.[^.]+$/, "")}${withRm ? "-cutout" : "-edited"}.${EXT[blob.type] || EXT[S.fmt]}`;
+      for (let n = 2; used.has(name); n++) name = name.replace(/(-\d+)?(\.\w+)$/, `-${n}$2`);
+      used.add(name); results.push({ name, blob });
+      item.status = fmtBytes(blob.size); item.cls = "done";
+    } catch (err) { console.error(err); item.status = "Failed"; item.cls = "fail"; }
+    $("bBar").style.width = Math.round((i + 1) / queue.length * 100) + "%";
+    st.textContent = `Processed ${i + 1} of ${queue.length}`;
+    drawQueue();
+  }
+  Object.assign(S, { original: keep.original, mask: keep.mask, maskVer: keep.maskVer, name: keep.name, srcType: keep.srcType, srcBytes: keep.srcBytes, isSample: keep.isSample, geo: keep.geo, size: keep.size, w: keep.w, h: keep.h, q: keep.q });
+  S.bg.base = keep.base; resetCaches();
+  batchRunning = false; syncUI(); render(); drawQueue();
+  if (!results.length) { st.className = "status err"; st.textContent = "No images could be processed."; return; }
+  try {
+    if (!window.JSZip) await loadLib("vendor/jszip.min.js", "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const zip = new window.JSZip();
+    results.forEach(r => zip.file(r.name, r.blob));
+    const z = await zip.generateAsync({ type: "blob" });
+    await saveFile("cutout-studio-batch.zip", z);
+    st.className = "status ok"; st.textContent = `Saved ${results.length} image${results.length === 1 ? "" : "s"} in cutout-studio-batch.zip (${fmtBytes(z.size)}).`;
+  } catch (err) {
+    if (err?.code === "declined") { st.textContent = "Download cancelled."; return; }
+    // ZIP not allowed here: save the images one by one instead
+    let saved = 0;
+    for (const r of results) { try { await saveFile(r.name, r.blob); saved++; } catch (e2) { if (e2?.code === "declined") break; } }
+    st.className = saved ? "status ok" : "status err";
+    st.textContent = saved ? `Saved ${saved} of ${results.length} images one by one (ZIP isn't available here).` : "The images couldn't be saved.";
+  }
+});
+
+/* ---------- AVIF support check ---------- */
+(async () => {
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 2;
+    const b = await new Promise(r => c.toBlob(r, "image/avif"));
+    if (b?.type === "image/avif") $("fmt").querySelector('option[value="image/avif"]').hidden = false;
+    else if (S.fmt === "image/avif") { S.fmt = "image/webp"; syncUI(); render(); }
+  } catch {}
+})();
+
+/* ---------- start ---------- */
+S.original = makeSample(); S.logoImg = makeSampleLogo();
+S.w = S.original.width; S.h = S.original.height; S.maskVer = ++maskSeq;
+await loadSettings();
+syncUI(); render(); commit();
+document.fonts.ready.then(() => { if ($("lMeta").textContent === "Sample logo") S.logoImg = makeSampleLogo(); render(); });
+</script>
+</body>
+</html>
