@@ -20,9 +20,11 @@ const KEEP = [
 
 const html = await fs.readFile(htmlPath, "utf8");
 const current = html.match(/const LIB_VERSION = "([^"]+)"/)[1];
-const latest = (await (await fetch("https://registry.npmjs.org/@imgly/background-removal/latest")).json()).version;
+// --pinned: fetch the files for the version the page already uses (used by the Vercel build)
+const latest = process.argv.includes("--pinned") ? current
+  : (await (await fetch("https://registry.npmjs.org/@imgly/background-removal/latest")).json()).version;
 console.log(`Current ${current}, latest ${latest}`);
-if (latest === current && !process.argv.includes("--force")) { console.log("Already on the latest version."); process.exit(0); }
+if (latest === current && !process.argv.includes("--force") && !process.argv.includes("--pinned")) { console.log("Already on the latest version."); process.exit(0); }
 
 const base = `https://staticimgly.com/@imgly/background-removal-data/${latest}/dist/`;
 const res = await fetch(base + "resources.json");
