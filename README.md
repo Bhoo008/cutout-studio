@@ -32,6 +32,10 @@ npm run update-model
 
 This checks for a new `@imgly/background-removal` release. If one exists, it downloads only the changed model files, updates the page and rebuilds `vendor/`. Test a photo afterwards.
 
+## Website (Vercel)
+
+The repo deploys to Vercel as a static site. `vercel.json` runs `tools/build-site.mjs`, which downloads the pinned model, builds `vendor/` and outputs `dist/`. Every push to `master` redeploys.
+
 ## Folders
 
 | Path | What it is |
