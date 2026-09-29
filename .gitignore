@@ -1,5 +1,5 @@
 node_modules/
 # Large downloaded files; recreate with `npm run setup` and `npm run build`
 bgdata/
-models/*.onnx
+models/
 vendor/

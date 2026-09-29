@@ -125,9 +125,7 @@ button.icon { padding: 6px 10px; font-weight: 500; font-size: 13px; }
     linear-gradient(45deg, transparent 75%, var(--check-b) 75%), linear-gradient(-45deg, transparent 75%, var(--check-b) 75%);
   background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0;
 }
-.cv-wrap { position: relative; line-height: 0; max-width: 100%; }
 #out { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; touch-action: none; cursor: default; }
-#ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .55; }
 #out.grab { cursor: grab; }
 #out.brush { cursor: none; }
 #out.crop { cursor: crosshair; }
@@ -190,22 +188,6 @@ button.icon { padding: 6px 10px; font-weight: 500; font-size: 13px; }
             <span class="hint" id="cropInfo">Drag a box on the preview.</span>
           </div>
           <button class="ghost" data-reset="geo">Reset crop &amp; rotation</button>
-        </div>
-      </details>
-
-      <!-- REMOVE OBJECTS -->
-      <details class="sec">
-        <summary>Remove objects <span class="tag" id="healTag">AI eraser</span></summary>
-        <div class="body">
-          <p class="hint">Paint over text, a date stamp, a logo, a blemish or an object, then click Remove. AI fills the spot with matching background. Use this only on images you own or have rights to.</p>
-          <div class="row">
-            <button id="healPaint" aria-pressed="false">Paint area</button>
-            <button class="primary" id="healRun" disabled>Remove painted area</button>
-            <button class="ghost" id="healClear" disabled>Clear paint</button>
-          </div>
-          <label class="rng">Brush size <output id="healBrushO"></output><input type="range" id="healBrush" min="6" max="160" value="40"></label>
-          <div id="healProg" hidden><div class="progress"><i id="healBar"></i></div></div>
-          <div class="status" id="healStatus">The eraser model (28 MB) loads the first time you use it.</div>
         </div>
       </details>
 
@@ -405,7 +387,7 @@ button.icon { padding: 6px 10px; font-weight: 500; font-size: 13px; }
           <button class="primary" id="cropApply">Apply crop</button>
           <button id="cropCancel">Cancel</button>
         </div>
-        <div class="canvas-box" id="box"><div class="cv-wrap"><canvas id="out"></canvas><canvas id="ov"></canvas></div><div id="brushCur" hidden></div></div>
+        <div class="canvas-box" id="box"><canvas id="out"></canvas><div id="brushCur" hidden></div></div>
         <div class="bar">
           <div class="export">
             <label class="inline">Format
@@ -473,7 +455,6 @@ const S = {
   fmt: "image/webp", q: 90, target: 0, model: "isnet_fp16",
 };
 let maskSeq = 0, tool = "move", brushSize = 40;
-let healMask = null, healPainted = false, healBusy = false; // "Remove objects" paint, in original-image pixels
 let cropMode = false, cropDraft = null, cropRatio = 0;
 let batchRunning = false;
 let boxes = {};
@@ -703,21 +684,7 @@ function render() {
     }
     ctx.restore();
   }
-  drawOverlay();
   if (!batchRunning) { scheduleEstimate(); scheduleCommit(); }
-}
-
-// Red preview of the "Remove objects" paint, on a separate canvas so it never ends up in the saved file.
-const ov = $("ov"), octx = ov.getContext("2d");
-function drawOverlay() {
-  if (ov.width !== out.width) ov.width = out.width;
-  if (ov.height !== out.height) ov.height = out.height;
-  octx.clearRect(0, 0, ov.width, ov.height);
-  if (!healPainted || !healMask || cropMode || batchRunning) return;
-  const d = S.drawRect, [nw, nh] = natDims();
-  const tmp = new OffscreenCanvas(nw, nh);
-  drawGeo(tmp.getContext("2d"), healMask, S.geo.crop || { x: 0, y: 0 });
-  octx.drawImage(tmp, d.x, d.y, d.w, d.h);
 }
 
 function renderCrop() {
@@ -739,7 +706,6 @@ function renderCrop() {
   const hs = u * 9; ctx.fillStyle = "#fff";
   for (const [x, y] of [[d.x, d.y], [d.x + d.w, d.y], [d.x, d.y + d.h], [d.x + d.w, d.y + d.h]]) ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
   $("dims").innerHTML = `Crop ${Math.round(d.w)} × ${Math.round(d.h)} <span>px</span>`;
-  drawOverlay();
 }
 
 /* ---------- UI sync ---------- */
@@ -764,12 +730,6 @@ function syncUI() {
   if (!isCut() && (tool === "erase" || tool === "restore")) tool = "move";
   setSeg($("toolSeg"), tool);
   $("brush").value = brushSize; $("brushO").textContent = brushSize + " px";
-  $("healBrush").value = brushSize; $("healBrushO").textContent = brushSize + " px";
-  $("healPaint").setAttribute("aria-pressed", String(tool === "heal"));
-  $("healPaint").textContent = tool === "heal" ? "Painting… (click to stop)" : "Paint area";
-  $("healRun").disabled = !healPainted || healBusy || cropMode;
-  $("healClear").disabled = !healPainted || healBusy;
-  $("healTag").textContent = healPainted ? "Area painted" : "AI eraser";
   $("feather").value = S.bg.feather; $("featherO").textContent = S.bg.feather ? S.bg.feather : "Off";
   $("outline").value = S.bg.outline; $("outlineO").textContent = S.bg.outline ? S.bg.outline : "Off";
   $("outlineColor").value = S.bg.outlineColor; $("shadow").checked = S.bg.shadow;
@@ -916,11 +876,10 @@ function scheduleCommit() {
 }
 function commit() {
   const json = snapJSON(), cur = hist.stack[hist.i];
-  if (cur && cur.json === json && cur.maskVer === S.maskVer && cur.orig === S.original) return;
+  if (cur && cur.json === json && cur.maskVer === S.maskVer) return;
   const maskRef = cur && cur.maskVer === S.maskVer ? cur.maskRef : (S.mask ? S.mask.convertToBlob({ type: "image/png" }) : null);
   hist.stack = hist.stack.slice(0, hist.i + 1);
-  // orig: the image itself (changes after Remove objects); bitmaps never change, so keep the reference
-  hist.stack.push({ json, maskVer: S.maskVer, maskRef, orig: S.original });
+  hist.stack.push({ json, maskVer: S.maskVer, maskRef });
   if (hist.stack.length > 40) hist.stack.shift();
   hist.i = hist.stack.length - 1;
   syncHist(); saveSettings();
@@ -932,7 +891,6 @@ async function goto(i) {
   hist.i = i; hist.restoring = true;
   const e = hist.stack[i];
   Object.assign(S, JSON.parse(e.json));
-  if (e.orig && e.orig !== S.original) { S.original = e.orig; healMask = null; healPainted = false; resetCaches(); }
   if (e.maskVer !== S.maskVer) {
     if (e.maskRef) {
       const bmp = await createImageBitmap(await e.maskRef);
@@ -977,7 +935,6 @@ function resetForNewImage(bmp) {
   S.original = bmp; S.mask = null; S.maskVer = ++maskSeq; S.bg.base = "original";
   S.geo = clone(DEF.geo); S.size.natural = true; S.w = bmp.width; S.h = bmp.height;
   tool = "move"; resetCaches();
-  healMask = null; healPainted = false;
 }
 async function loadMain(file) {
   try {
@@ -1028,7 +985,7 @@ let fetchedFromNetwork = false;
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input?.url || String(input);
-  if (!/\/bgdata\/|\/models\/|background-removal-data/.test(url) || !window.caches) return nativeFetch(input, init);
+  if (!/\/bgdata\/|background-removal-data/.test(url) || !window.caches) return nativeFetch(input, init);
   try {
     const c = await caches.open(MODEL_CACHE);
     const hit = await c.match(url);
@@ -1046,75 +1003,12 @@ window.fetch = async (input, init) => {
 let enginePromise = null;
 function loadEngine() {
   enginePromise ??= import("./vendor/engine.mjs")
-    .catch(() => import(`https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/+esm`).then(m => ({ removeBackground: m.removeBackground, ort: null })))
+    .catch(() => import(`https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/+esm`))
     .catch(e => { enginePromise = null; throw e; });
   return enginePromise;
 }
 const loadRemover = loadEngine;
 
-/* ---------- remove objects (MI-GAN inpainting) ---------- */
-let miganPromise = null;
-function loadMigan(st) {
-  miganPromise ??= (async () => {
-    const { ort } = await loadEngine();
-    if (!ort) throw new Error("Object removal needs the local version. Open it with start.bat");
-    // CPU build of the runtime (the same files the background remover uses)
-    ort.env.wasm.wasmPaths = {
-      mjs: new URL("vendor/ort/ort-wasm-simd-threaded.mjs", location.href).href,
-      wasm: new URL("vendor/ort/ort-wasm-simd-threaded.wasm", location.href).href,
-    };
-    st.textContent = "Loading the eraser model…";
-    const res = await fetch("models/migan_pipeline_v2.onnx");
-    if (!res.ok) throw new Error("Eraser model not found (models/migan_pipeline_v2.onnx)");
-    const buf = await res.arrayBuffer();
-    return ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
-  })().catch(e => { miganPromise = null; throw e; });
-  return miganPromise;
-}
-async function healRun() {
-  if (!healPainted || healBusy) return;
-  const st = $("healStatus");
-  healBusy = true; if (tool === "heal") tool = "move"; syncUI();
-  st.className = "status"; $("healProg").hidden = false; $("healBar").style.width = "15%";
-  try {
-    const session = await loadMigan(st);
-    const { ort } = await loadEngine();
-    $("healBar").style.width = "45%"; st.textContent = "Filling the painted area…";
-    const W = W0(), H = H0(), N = W * H;
-    const c = new OffscreenCanvas(W, H), g = c.getContext("2d", { willReadFrequently: true });
-    g.drawImage(S.original, 0, 0);
-    const px = g.getImageData(0, 0, W, H);
-    const hm = healMask.getContext("2d").getImageData(0, 0, W, H).data;
-    const img = new Uint8Array(3 * N), mask = new Uint8Array(N);
-    for (let i = 0, j = 0; i < N; i++, j += 4) {
-      img[i] = px.data[j]; img[N + i] = px.data[j + 1]; img[2 * N + i] = px.data[j + 2];
-      mask[i] = hm[j + 3] > 10 ? 0 : 255; // 0 = fill this pixel, 255 = keep
-    }
-    const t0 = performance.now();
-    const outT = (await session.run({
-      image: new ort.Tensor("uint8", img, [1, 3, H, W]),
-      mask: new ort.Tensor("uint8", mask, [1, 1, H, W]),
-    })).result.data;
-    for (let i = 0, j = 0; i < N; i++, j += 4) { px.data[j] = outT[i]; px.data[j + 1] = outT[N + i]; px.data[j + 2] = outT[2 * N + i]; } // alpha stays
-    g.putImageData(px, 0, 0);
-    S.original = await createImageBitmap(c);
-    healMask = null; healPainted = false; resetCaches();
-    $("healBar").style.width = "100%";
-    st.className = "status ok";
-    st.textContent = `Removed in ${((performance.now() - t0) / 1000).toFixed(1)} s. Paint again to touch up, or Undo.`;
-  } catch (err) {
-    console.error(err);
-    st.className = "status err";
-    st.textContent = "Object removal failed: " + (err?.message || err);
-  } finally {
-    healBusy = false; setTimeout(() => { $("healProg").hidden = true; }, 600);
-    syncUI(); render();
-  }
-}
-$("healPaint").addEventListener("click", () => { if (cropMode) return; tool = tool === "heal" ? "move" : "heal"; syncUI(); });
-$("healRun").addEventListener("click", healRun);
-$("healClear").addEventListener("click", () => { healMask = null; healPainted = false; syncUI(); drawOverlay(); });
-$("healBrush").addEventListener("input", e => { brushSize = +e.target.value; $("healBrushO").textContent = brushSize + " px"; });
 
 function progressTo(bar, st) {
   const seen = {};
@@ -1260,7 +1154,7 @@ $("ratioChips").addEventListener("click", e => {
 const scr = () => out.width / out.getBoundingClientRect().width; // canvas px per screen px
 function toCanvas(e) { const r = out.getBoundingClientRect(); return [(e.clientX - r.left) * out.width / r.width, (e.clientY - r.top) * out.height / r.height]; }
 function hit(x, y) { for (const k of ["logo", "text"]) { const b = boxes[k]; if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return k; } return null; }
-function brushOn() { return !cropMode && !healBusy && (tool === "heal" || ((tool === "erase" || tool === "restore") && isCut())); }
+function brushOn() { return !cropMode && (tool === "erase" || tool === "restore") && isCut(); }
 let drag = null, paint = null, cdrag = null;
 
 function stamp(g, x, y, r) {
@@ -1273,21 +1167,16 @@ function paintTo(x, y) {
   const p = [(x - d.x) * sx, (y - d.y) * sy];
   const r = Math.max(1, brushSize / 2 * scr() * sx);
   if (!Number.isFinite(r) || !Number.isFinite(p[0])) return;
-  const heal = tool === "heal";
-  if (heal && !healMask) healMask = new OffscreenCanvas(W0(), H0());
-  const g = (heal ? healMask : S.mask).getContext("2d");
+  const g = S.mask.getContext("2d");
   g.save(); g.globalCompositeOperation = tool === "erase" ? "destination-out" : "source-over";
   const from = paint.last || p, dist = Math.hypot(p[0] - from[0], p[1] - from[1]);
   const steps = paint.last ? Math.max(1, Math.ceil(dist / (r / 4))) : 1;
   for (let i = 1; i <= steps; i++) {
     const [ox, oy] = toOrig(from[0] + (p[0] - from[0]) * i / steps, from[1] + (p[1] - from[1]) * i / steps);
-    if (heal) { g.fillStyle = "#ff2d2d"; g.beginPath(); g.arc(ox, oy, r, 0, Math.PI * 2); g.fill(); } // hard edge: exact area to fill
-    else stamp(g, ox, oy, r);
+    stamp(g, ox, oy, r);
   }
   g.restore();
-  paint.last = p;
-  if (heal) { if (!healPainted) { healPainted = true; syncUI(); } drawOverlay(); }
-  else { S.maskVer = ++maskSeq; requestRender(); }
+  paint.last = p; S.maskVer = ++maskSeq; requestRender();
 }
 function cropDown(x, y) {
   const d = cropDraft, tol = 22 * scr();

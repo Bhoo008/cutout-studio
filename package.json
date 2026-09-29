@@ -6,7 +6,7 @@
     "start": "node server.mjs --open",
     "build": "node tools/build-vendor.mjs",
     "update-model": "node tools/update-model.mjs",
-    "setup": "npm install && node tools/update-model.mjs --force && node tools/fetch-eraser-model.mjs"
+    "setup": "npm install && node tools/update-model.mjs --force"
   },
   "author": "",
   "license": "UNLICENSED",

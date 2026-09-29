@@ -3,7 +3,6 @@
 An image tool that runs entirely on your own computer. Nothing is uploaded.
 
 - **Remove background**: AI cutout, with brushes to erase or restore by hand, plus soft edge, outline and drop shadow
-- **Remove objects**: paint over text, a date stamp, a blemish or an object and AI fills the spot (MI-GAN)
 - **Crop, rotate, flip**, including passport and social-media shapes
 - **Resize**, **watermark** (text and/or logo), **compress** to a maximum file size
 - **Convert** between PNG, JPEG, WebP, AVIF and ICO; opens HEIC photos from iPhones
@@ -40,12 +39,16 @@ This checks for a new `@imgly/background-removal` release. If one exists, it dow
 | `index.html` | the whole app |
 | `server.mjs`, `start.bat` | local web server and launcher |
 | `bgdata/` | background-removal model and runtime (downloaded) |
-| `models/` | object-removal model, MI-GAN (downloaded) |
 | `vendor/` | libraries and fonts for offline use (built by `npm run build`) |
 | `tools/` | build, setup and update scripts |
 
 ## Licences
 
 - Background removal uses [@imgly/background-removal](https://github.com/imgly/background-removal-js), licensed **AGPL-3.0**. Private use on your own computer is fine. Before offering this tool to other people (for example on a website), either publish this project's source code under the AGPL or buy a commercial licence from IMG.LY.
-- Object removal uses [MI-GAN](https://huggingface.co/andraniksargsyan/migan), MIT licence (see `models/MIGAN-LICENSE.txt`).
-- Only remove objects or watermarks from images you own or have rights to.
+
+## Older version with object removal
+
+An earlier version had a "Remove objects" AI eraser (MI-GAN). It is saved in git as the branch `backup/with-object-removal` (tag `v1.0-with-object-removal`). Its model is still on disk in `models/`.
+
+To switch to it: `git switch backup/with-object-removal`, then `npm run build` and `start.bat`.
+To come back: `git switch master`, then `npm run build`.
